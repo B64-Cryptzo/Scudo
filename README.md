@@ -9,7 +9,7 @@
  Include all the files included in the project and simply create a new class with your desired function's address as the parameter. 
 
 ```cpp
-Scudo protectedFunction = Scudo(&Function, GetFunctionLength(&Function));
+Scudo protectedFunction = Scudo(&Function);
 
 // Call your function whenever you want 
 ...
