@@ -11,107 +11,107 @@ constexpr BYTE DEBUG_BYTE = 0xCC; // Intel ICE debugging byte
 
 class Scudo {
 
-    // Encrypt the function using B64 encryption
-    std::vector<BYTE> EncryptFunction(void* function, SIZE_T size) {
+    /*
+    * Encrypt the function using B64 encryption
+    */
+    void EncryptFunction(void* function, SIZE_T size) {
 
+        // Set the protection
+        MemoryProtect memFunction = MemoryProtect(functionAddress, functionSize, PAGE_EXECUTE_READWRITE);
+
+        // Cast the address to an accessible BYTE pointer
         BYTE* functionBytes = static_cast<BYTE*>(function);
-        std::vector<BYTE> encryptedBytes;
+
+        // Save the first byte for the function
+        this->firstByte = *functionBytes;
 
         // Skip the first byte and encrypt the rest
         for (SIZE_T i = 1; i < size; ++i) {
-            BYTE encryptedByte = functionBytes[i] ^ xorKey; // Encrypt using XOR
-            encryptedBytes.push_back(encryptedByte);
-            functionBytes[i] = encryptedByte;
+            functionBytes[i] ^= this->xorKey; // Encrypt using XOR
         }
-        return encryptedBytes;
-    }
 
-    // Decrypt the function by XORing with debug byte
+        // Set the first byte to the debug byte
+        *static_cast<BYTE*>(functionAddress) = DEBUG_BYTE;
+    }
+    /*
+    * Decrypt the function by XORing with debug byte
+    */
     void DecryptFunction(void* function, SIZE_T size) {
 
+        // Set the protection
         MemoryProtect memFunction = MemoryProtect(function, size, PAGE_EXECUTE_READWRITE);
 
-        *static_cast<BYTE*>(function) = this->firstByte;
-
-
+        // Cast the address to an accessible BYTE pointer
         BYTE* functionBytes = static_cast<BYTE*>(function);
+
+        // Restore the first byte of the function
+        *functionBytes = this->firstByte;
+
         for (SIZE_T i = 1; i < size; ++i) {
-            functionBytes[i] ^= xorKey; // Decrypt using XOR
+            functionBytes[i] ^= this->xorKey; // Decrypt using XOR
         }
 
-        encryptedFunction.clear();
-
+        // Notify the enforcer thread to re-encrypt the function
         wasDecrypted = true;
     }
 
 public:
-    using EncryptedFunctionMap = std::map<void*, Scudo*>;
+    using EncryptedFunctionMap = std::map<void*, Scudo*>; // Map to access al encrypted functions
 
+    /*
+    * Initializer for Scudo that encrypts the function and ensures all variables are set for decryption
+    */
     Scudo(void* functionAddress, SIZE_T functionSize) : functionAddress(functionAddress), functionSize(functionSize) {
 
 
-        //Ensure valid function pointer was passed
+        // Ensure valid function pointer was passed
         if (!functionAddress) 
             return;
 
-        //Set the XOR byte to a random value
+        // Set the XOR byte to a random value
         std::srand(std::time(nullptr));
         xorKey = static_cast<unsigned int>(1000000000 + (std::rand() % (9999999999 - 1000000000 + 1)));
 
+        // Initialize the Handler
         if (!isExceptionHandlingInitialized) {
             exceptionHandler = AddVectoredExceptionHandler(0, ExceptionHandler);
             isExceptionHandlingInitialized = true;
         }
 
-        //Set the protection
-        MemoryProtect memFunction = MemoryProtect(functionAddress, functionSize, PAGE_EXECUTE_READWRITE);
-
         // Encrypt the function
-        encryptedFunction = EncryptFunction(functionAddress, functionSize);
-
-        // Save the first byte of the function
-        firstByte = *static_cast<BYTE*>(functionAddress);
-        encryptedFunction.insert(encryptedFunction.begin(), firstByte);
-
-        // Set the first byte to the debug byte
-        *static_cast<BYTE*>(functionAddress) = DEBUG_BYTE;
+        EncryptFunction(functionAddress, functionSize);
 
         // Store the encrypted function in the map
         encryptedFunctions[functionAddress] = this;
 
+        // Set the encryption flag
         functionEncrypted = true;
 
+        // Start a detached thread to check for decryptions
         std::thread enforcerThread([this]() {
             this->encryptionEnforcer();
             });
         enforcerThread.detach();
     }
 
+    /*
+    * Destructor for Scudo that decrypts the function and ensures all vectors and maps are adjusted
+    */
     ~Scudo() {
-
-        //Set the protection
-        MemoryProtect memFunction = MemoryProtect(functionAddress, functionSize, PAGE_EXECUTE_READWRITE);
-
-        // Restore the original function
-        *static_cast<BYTE*>(functionAddress) = encryptedFunction[0];
 
         // Decrypt the function
         DecryptFunction(functionAddress, functionSize);
 
+        // Alert Enforcer Thread
         functionEncrypted = false;
-
-
-        // Clear the encrypted function vector and delete the objects
-        encryptedFunction.clear();
 
         // Remove the encrypted function from the map
         encryptedFunctions.erase(functionAddress);
-
-        if (isExceptionHandlingInitialized) {
-            RemoveVectoredExceptionHandler(exceptionHandler);
-            isExceptionHandlingInitialized = false;
-        }
     }
+
+    /*
+    * Thread that will re-encrypt functions after they have been decrypted
+    */
     void encryptionEnforcer()
     {
         while (functionEncrypted)
@@ -124,11 +124,7 @@ public:
                 MemoryProtect memFunction = MemoryProtect(functionAddress, functionSize, PAGE_EXECUTE_READWRITE);
 
                 // Encrypt the function
-                encryptedFunction = EncryptFunction(functionAddress, functionSize);
-
-                // Save the first byte of the function
-                firstByte = *static_cast<BYTE*>(functionAddress);
-                encryptedFunction.insert(encryptedFunction.begin(), firstByte);
+                EncryptFunction(functionAddress, functionSize);
 
                 // Set the first byte to the debug byte
                 *static_cast<BYTE*>(functionAddress) = DEBUG_BYTE;
@@ -138,10 +134,16 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
+    /*
+    * Returns true of the address passed is the entrypoint to an already encrypted function
+    */
     static bool IsEncryptedFunction(void* functionAddress) {
         return encryptedFunctions.find(functionAddress) != encryptedFunctions.end();
     }
 
+    /*
+    * Returns class object of the function encrypted at the passed address
+    */
     static Scudo* GetEncryptedFunction(void* functionAddress) {
         auto it = encryptedFunctions.find(functionAddress);
         if (it != encryptedFunctions.end()) {
@@ -149,7 +151,10 @@ public:
         }
         return nullptr;
     }
-
+    
+    /*
+    * Exception handler that will handler and parse the ICE debug instructions placed on functions
+    */
     static LONG NTAPI ExceptionHandler(EXCEPTION_POINTERS* exceptionInfo) {
         PEXCEPTION_RECORD exceptionRecord = exceptionInfo->ExceptionRecord;
         void* exceptionAddress = exceptionRecord->ExceptionAddress;
@@ -179,7 +184,6 @@ private:
     SIZE_T functionSize;
     BYTE firstByte;
     unsigned int xorKey;
-    std::vector<BYTE> encryptedFunction;
     PVOID exceptionHandler;
     bool functionEncrypted, wasDecrypted, isExceptionHandlingInitialized;
 };
