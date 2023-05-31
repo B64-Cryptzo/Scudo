@@ -4,7 +4,7 @@
  Scudo is a C++ library that provides a method to encrypt sensitive functions all while being able to dynamically execute the function. This offers a concise solution for securing and executing encrypted functions in your codebase.
  
  ## Usage
- ![banner](img/banner.png)
+ ![banner](img/demo.gif)
  Include all the files included in the project and simply create a new class with your desired function's address as the parameter. 
 
 ```cpp
