@@ -61,8 +61,7 @@ public:
     /*
     * Initializer for Scudo that encrypts the function and ensures all variables are set for decryption
     */
-    Scudo(void* functionAddress, SIZE_T functionSize) : functionAddress(functionAddress), functionSize(functionSize) {
-
+    Scudo(void* functionAddress) : functionAddress(functionAddress), functionSize(GetFunctionLength(functionAddress)) {
 
         // Ensure valid function pointer was passed
         if (!functionAddress) 
