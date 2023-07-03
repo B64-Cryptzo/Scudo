@@ -1,7 +1,4 @@
 #pragma once
-#include <Windows.h>
-#include <vector>
-#include <thread>
 
 #include "../B64/B64Protect.h"
 #include "../B64/B64Function.h"
