@@ -56,7 +56,7 @@ class Scudo {
     }
 
 public:
-    using EncryptedFunctionMap = std::map<void*, Scudo*>; // Map to access al encrypted functions
+    using EncryptedFunctionMap = std::map<void*, Scudo*>; // Map to access all encrypted functions
 
     /*
     * Initializer for Scudo that encrypts the function and ensures all variables are set for decryption
@@ -152,7 +152,7 @@ public:
     }
     
     /*
-    * Exception handler that will handler and parse the ICE debug instructions placed on functions
+    * Exception handler that will handle and parse the ICE debug instructions placed on functions
     */
     static LONG NTAPI ExceptionHandler(EXCEPTION_POINTERS* exceptionInfo) {
         PEXCEPTION_RECORD exceptionRecord = exceptionInfo->ExceptionRecord;
