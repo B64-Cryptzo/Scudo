@@ -6,6 +6,7 @@
 #include "../B64/B64Protect.h"
 
 
+
 constexpr BYTE DEBUG_BYTE = 0xCC; // Intel ICE debugging byte
 
 
@@ -155,16 +156,20 @@ public:
     * Exception handler that will handle and parse the ICE debug instructions placed on functions
     */
     static LONG NTAPI ExceptionHandler(EXCEPTION_POINTERS* exceptionInfo) {
+
+        // Shorten the pointer chain for simplicity
         PEXCEPTION_RECORD exceptionRecord = exceptionInfo->ExceptionRecord;
+
+        // Get the address where the exception occured
         void* exceptionAddress = exceptionRecord->ExceptionAddress;
 
-
+        // Check if the exception is at an encrypted function
         if (exceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT && IsEncryptedFunction(exceptionAddress)) {
 
             currentEncryptedFunction = GetEncryptedFunction(exceptionAddress);
 
             if (currentEncryptedFunction) {
-
+                
                 // Decrypt the function
                 currentEncryptedFunction->DecryptFunction(currentEncryptedFunction->functionAddress, currentEncryptedFunction->functionSize);
 
@@ -172,6 +177,10 @@ public:
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
         }
+        /*
+        * Use illegal instruction breakpoint at return address found on the stack to trigger an exception which will
+        * allow the program to re-encrypt the function immediately after it's done executing.
+        */
 
         // Continue searching for another exception handler
         return EXCEPTION_CONTINUE_SEARCH;

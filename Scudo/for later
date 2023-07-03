@@ -1,0 +1,34 @@
+constexpr SHORT ILLEGAL_INSTRUCTION_BYTE = 0x0F0B; // Illegal Instruction
+
+void* tempReturnAddress;
+
+else if (exceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION)
+{
+    currentEncryptedFunction = GetEncryptedFunctionViaReturnAddress(exceptionAddress);
+
+    if (currentEncryptedFunction) {
+
+        // Re-Encrypt the function
+        currentEncryptedFunction->EncryptFunction(currentEncryptedFunction->functionAddress, currentEncryptedFunction->functionSize);
+
+        // Set the first byte to the debug byte
+        *static_cast<BYTE*>(currentEncryptedFunction->functionAddress) = DEBUG_BYTE;
+
+        // Resume execution
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+}
+
+/*
+* Returns the class object of the function encrypted with the specified return address
+*/
+static Scudo* GetEncryptedFunctionViaReturnAddress(void* returnAddress) {
+    for (const auto& pair : encryptedFunctions) { 
+        Scudo* encryptedFunction = pair.second;
+        if (encryptedFunction->tempReturnAddress == returnAddress) {
+            return encryptedFunction;
+            break;
+        }
+    }
+    return nullptr;
+}
