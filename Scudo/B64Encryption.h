@@ -4,57 +4,13 @@
 #include <thread>
 
 #include "../B64/B64Protect.h"
-
-
+#include "../B64/B64Function.h"
 
 constexpr BYTE DEBUG_BYTE = 0xCC; // Intel ICE debugging byte
 
+bool isExceptionHandlingInitialized = false;
 
 class Scudo {
-
-    /*
-    * Encrypt the function using B64 encryption
-    */
-    void EncryptFunction(void* function, SIZE_T size) {
-
-        // Set the protection
-        MemoryProtect memFunction = MemoryProtect(functionAddress, functionSize, PAGE_EXECUTE_READWRITE);
-
-        // Cast the address to an accessible BYTE pointer
-        BYTE* functionBytes = static_cast<BYTE*>(function);
-
-        // Save the first byte for the function
-        this->firstByte = *functionBytes;
-
-        // Skip the first byte and encrypt the rest
-        for (SIZE_T i = 1; i < size; ++i) {
-            functionBytes[i] ^= this->xorKey; // Encrypt using XOR
-        }
-
-        // Set the first byte to the debug byte
-        *static_cast<BYTE*>(functionAddress) = DEBUG_BYTE;
-    }
-    /*
-    * Decrypt the function by XORing with debug byte
-    */
-    void DecryptFunction(void* function, SIZE_T size) {
-
-        // Set the protection
-        MemoryProtect memFunction = MemoryProtect(function, size, PAGE_EXECUTE_READWRITE);
-
-        // Cast the address to an accessible BYTE pointer
-        BYTE* functionBytes = static_cast<BYTE*>(function);
-
-        // Restore the first byte of the function
-        *functionBytes = this->firstByte;
-
-        for (SIZE_T i = 1; i < size; ++i) {
-            functionBytes[i] ^= this->xorKey; // Decrypt using XOR
-        }
-
-        // Notify the enforcer thread to re-encrypt the function
-        wasDecrypted = true;
-    }
 
 public:
     using EncryptedFunctionMap = std::map<void*, Scudo*>; // Map to access all encrypted functions
@@ -65,12 +21,11 @@ public:
     Scudo(void* functionAddress) : functionAddress(functionAddress), functionSize(GetFunctionLength(functionAddress)) {
 
         // Ensure valid function pointer was passed
-        if (!functionAddress) 
+        if (!functionAddress || !functionSize)
             return;
 
         // Set the XOR byte to a random value
-        std::srand(std::time(nullptr));
-        xorKey = static_cast<unsigned int>(1000000000 + (std::rand() % (9999999999 - 1000000000 + 1)));
+        xorKey = static_cast<unsigned int>(((std::clock() + CLOCKS_PER_SEC) << 10) & 0xFFFFFFFF);
 
         // Initialize the Handler
         if (!isExceptionHandlingInitialized) {
@@ -83,15 +38,6 @@ public:
 
         // Store the encrypted function in the map
         encryptedFunctions[functionAddress] = this;
-
-        // Set the encryption flag
-        functionEncrypted = true;
-
-        // Start a detached thread to check for decryptions
-        std::thread enforcerThread([this]() {
-            this->encryptionEnforcer();
-            });
-        enforcerThread.detach();
     }
 
     /*
@@ -102,38 +48,10 @@ public:
         // Decrypt the function
         DecryptFunction(functionAddress, functionSize);
 
-        // Alert Enforcer Thread
-        functionEncrypted = false;
-
         // Remove the encrypted function from the map
         encryptedFunctions.erase(functionAddress);
     }
-
-    /*
-    * Thread that will re-encrypt functions after they have been decrypted
-    */
-    void encryptionEnforcer()
-    {
-        while (functionEncrypted)
-        {
-            if (wasDecrypted)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // TODO: find better way of waiting for function to finish executing
-
-                //Ensure memory protection
-                MemoryProtect memFunction = MemoryProtect(functionAddress, functionSize, PAGE_EXECUTE_READWRITE);
-
-                // Encrypt the function
-                EncryptFunction(functionAddress, functionSize);
-
-                // Set the first byte to the debug byte
-                *static_cast<BYTE*>(functionAddress) = DEBUG_BYTE;
-
-                wasDecrypted = false; // Reset the decrypted flag
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
+    
     /*
     * Returns true of the address passed is the entrypoint to an already encrypted function
     */
@@ -151,7 +69,20 @@ public:
         }
         return nullptr;
     }
-    
+
+    /*
+    * Returns the class object of the function encrypted with the specified return address
+    */
+    static Scudo* ReturnAddressToFunction(void* returnAddress) {
+        for (const auto& pair : encryptedFunctions) {
+            Scudo* encryptedFunction = pair.second;
+            if (encryptedFunction->lastReturnAddress == reinterpret_cast<uintptr_t>(returnAddress)) {
+                return encryptedFunction;
+            }
+        }
+        return nullptr;
+    }
+
     /*
     * Exception handler that will handle and parse the ICE debug instructions placed on functions
     */
@@ -160,40 +91,149 @@ public:
         // Shorten the pointer chain for simplicity
         PEXCEPTION_RECORD exceptionRecord = exceptionInfo->ExceptionRecord;
 
+        // If the exception isn't a breakpoint, look for another handler
+        if (exceptionRecord->ExceptionCode != EXCEPTION_BREAKPOINT)
+            return EXCEPTION_CONTINUE_SEARCH;
+
         // Get the address where the exception occured
         void* exceptionAddress = exceptionRecord->ExceptionAddress;
 
-        // Check if the exception is at an encrypted function
-        if (exceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT && IsEncryptedFunction(exceptionAddress)) {
-
-            currentEncryptedFunction = GetEncryptedFunction(exceptionAddress);
+        /*
+        * Use INT3 instruction breakpoint at return address found on the stack to trigger an exception which will
+        * allow the program to re-encrypt the function immediately after it's done executing.
+        */
+        if (IsEncryptedFunction(exceptionAddress)) // Check if the breakpoint occured at an encrypted function
+        {
+            // Get the encrypted function's object
+            currentEncryptedFunction = GetEncryptedFunction(exceptionAddress); 
 
             if (currentEncryptedFunction) {
-                
-                // Decrypt the function
-                currentEncryptedFunction->DecryptFunction(currentEncryptedFunction->functionAddress, currentEncryptedFunction->functionSize);
+
+                PCONTEXT contextRecord = exceptionInfo->ContextRecord; 
+
+                // Create a pointer to the rspAddress
+                uintptr_t* returnAddressPtr = reinterpret_cast<uintptr_t*>(contextRecord->Rsp);
+
+                // Dereference the pointer to retrieve the return address value
+                currentEncryptedFunction->lastReturnAddress = *returnAddressPtr;
+
+                // Decrypts the function and puts breakpoint on return address
+                currentEncryptedFunction->decryptionRoutine();
 
                 // Resume execution
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
         }
-        /*
-        * Use illegal instruction breakpoint at return address found on the stack to trigger an exception which will
-        * allow the program to re-encrypt the function immediately after it's done executing.
-        */
+        else
+        {
+            // Get the encrypted function's object from the return address associated with it
+            currentEncryptedFunction = ReturnAddressToFunction(exceptionAddress);
 
-        // Continue searching for another exception handler
-        return EXCEPTION_CONTINUE_SEARCH;
+            if (currentEncryptedFunction) {
+
+                // Re-encrypt the function aswell as remove the breakpoint from the return address
+                currentEncryptedFunction->encryptionRoutine();
+
+                return EXCEPTION_CONTINUE_EXECUTION;
+            }
+            return EXCEPTION_CONTINUE_SEARCH;
+        }
     }
-    static EncryptedFunctionMap encryptedFunctions;
 private:
-    static thread_local Scudo* currentEncryptedFunction;
+    /*
+    * Encrypt the function using B64 encryption
+    */
+    void EncryptFunction(void* function, SIZE_T size) {
+
+        // Set the protection
+        MemoryProtect memFunction = MemoryProtect(functionAddress, functionSize, PAGE_EXECUTE_READWRITE);
+
+        // Save the first byte for the function
+        this->firstByte = *static_cast<BYTE*>(function);
+
+        // Skip the first byte and encrypt the rest
+        for (SIZE_T i = 1; i < size; ++i) {
+            static_cast<BYTE*>(function)[i] ^= this->xorKey; // Encrypt using XOR
+        }
+
+        // Set the first byte to the debug byte
+        *static_cast<BYTE*>(functionAddress) = DEBUG_BYTE;
+    }
+
+    /*
+    * Decrypt the function by XORing with debug byte
+    */
+    void DecryptFunction(void* function, SIZE_T size) {
+
+        // Set the protection
+        MemoryProtect memFunction = MemoryProtect(function, size, PAGE_EXECUTE_READWRITE);
+
+        // Restore the first byte of the function
+        *static_cast<BYTE*>(function) = this->firstByte;
+
+        for (SIZE_T i = 1; i < size; ++i) {
+            static_cast<BYTE*>(function)[i] ^= this->xorKey; // Decrypt using XOR
+        }
+
+        // Notify the enforcer thread to re-encrypt the function
+        wasDecrypted = true;
+    }
+
+    /*
+    * Routine for the handler to re-encrypt the function immediately after it finishes executing
+    */
+    void encryptionRoutine()
+    {
+        // Set the protection
+        MemoryProtect memFunction = MemoryProtect((PVOID)currentEncryptedFunction->lastReturnAddress, sizeof(BYTE), PAGE_EXECUTE_READWRITE);
+
+        // Reset the return address to normal
+        *static_cast<BYTE*>((void*)this->lastReturnAddress) = this->lastReturnAddressByte;
+
+        // Re-Encrypt the function
+        this->EncryptFunction(this->functionAddress, this->functionSize);
+
+        // Reset the decrypted flag
+        this->wasDecrypted = false;
+    }
+
+    /*
+    * Routine for the handler to dencrypt the function immediately after being called
+    */
+    void decryptionRoutine()
+    {
+        // Set the protection
+        MemoryProtect memFunction = MemoryProtect((PVOID)currentEncryptedFunction->lastReturnAddress, sizeof(BYTE), PAGE_EXECUTE_READWRITE);
+
+        // Save instruction at return address
+        currentEncryptedFunction->lastReturnAddressByte = *reinterpret_cast<BYTE*>(currentEncryptedFunction->lastReturnAddress);
+
+        // Place illegal instruction at return address
+        *reinterpret_cast<BYTE*>(currentEncryptedFunction->lastReturnAddress) = DEBUG_BYTE;
+
+        // Decrypt the function
+        currentEncryptedFunction->DecryptFunction(currentEncryptedFunction->functionAddress, currentEncryptedFunction->functionSize);
+    }
+
+    // For encryption and decryption
     void* functionAddress;
     SIZE_T functionSize;
+
+    // For decryption
     BYTE firstByte;
-    unsigned int xorKey;
     PVOID exceptionHandler;
-    bool functionEncrypted, wasDecrypted, isExceptionHandlingInitialized;
+
+    // For Encryption
+    unsigned int xorKey;
+    uintptr_t lastReturnAddress;
+    BYTE lastReturnAddressByte;
+
+    // Status variables
+    bool wasDecrypted;
+
+    // For Handler
+    static thread_local Scudo* currentEncryptedFunction;
+    static EncryptedFunctionMap encryptedFunctions;
 };
 
 // Initialize static variables

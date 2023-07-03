@@ -4,6 +4,10 @@
 
 
 std::int32_t GetFunctionLength(void* function) {
+
+	if (!function)
+		return 0;
+
 	PCHAR functionAddress = PCHAR(function); //Address to start
 	unsigned long functionSize = 0ul; //Function Size
 
