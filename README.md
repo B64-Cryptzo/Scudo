@@ -28,7 +28,7 @@ Functions in memory are only accessible after compilation. That is why in order 
 
 To accomplish this we do the following:
 - Use an opcode disassembler like [capstone](https://github.com/capstone-engine/capstone) to read the function bytes until we reach [0xCC](https://en.wikipedia.org/wiki/INT_(x86_instruction)#:~:text=The%20INT3%20instruction%20is%20a,are%20encoded%20using%20two%20bytes.) since functions in memory are typically alligned using 0xCC instructions
-- Use function pointers to determine the address of a function memory. This can be trivial because depending on whether you're in debug mode or release, functions are inlined differently.
+- Use function pointers to determine the address of a function in memory. This can be trivial because depending on whether you're in debug mode or release, functions are referenced differently.
 
 Now that you understood the way we obtain our function information, I can explain how the class encrypts and decrypts functions.
 
