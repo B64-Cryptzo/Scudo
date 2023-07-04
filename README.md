@@ -13,14 +13,14 @@ Scudo protectedFunction = Scudo(&Function);
 
 // Call your function whenever you want 
 ...
-
-protectedFunction.~Scudo();
 ```
 
 You can see the [example](https://github.com/B64-Cryptzo/Scudo/blob/main/Scudo/B64EncryptionDemo.cpp) that shows a demo function take in parameters and return a value.
 
-## Technical Explanation
+## Compatibility
+In order to fully take advantage of the capabilities of Scudo, ensure that you disable program optimization in your project settings. Set the project to release mode aswell to avoid having to calculate the entrypoint to your functions manually.
 
+## Technical Explanation
 Functions in memory are only accessible after compilation. That is why in order to encrypt functions at runtime, we have to determine the size in bytes of our function in addition to the address before compiling. 
 
 To accomplish this we do the following:
