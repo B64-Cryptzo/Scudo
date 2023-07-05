@@ -30,7 +30,7 @@ public:
         }
 
         // Encrypt the function
-        EncryptFunction(functionAddress, functionSize);
+        encryptFunction(functionAddress, functionSize);
 
         // Store the encrypted function in the map
         encryptedFunctions[functionAddress] = this;
@@ -42,7 +42,7 @@ public:
     ~Scudo() {
 
         // Decrypt the function
-        DecryptFunction(functionAddress, functionSize);
+        decryptFunction(functionAddress, functionSize);
 
         // Remove the encrypted function from the map
         encryptedFunctions.erase(functionAddress);
@@ -68,10 +68,10 @@ private:
         * Use INT3 instruction breakpoint at return address found on the stack to trigger an exception which will
         * allow the program to re-encrypt the function immediately after it's done executing.
         */
-        if (!IsEncryptedFunction(exceptionAddress)) // Check if the breakpoint occured at an encrypted function
+        if (!isEncryptedFunction(exceptionAddress)) // Check if the breakpoint occured at an encrypted function
         {
             // Get the encrypted function's object from the return address associated with it
-            if ((currentEncryptedFunction = ReturnAddressToFunction(exceptionAddress)), currentEncryptedFunction == nullptr)
+            if ((currentEncryptedFunction = returnAddressToFunction(exceptionAddress)), currentEncryptedFunction == nullptr)
                 return EXCEPTION_CONTINUE_SEARCH;
 
             // Re-encrypt the function aswell as remove the breakpoint from the return address
@@ -81,7 +81,7 @@ private:
         }
 
         // Get the encrypted function's object
-        if ((currentEncryptedFunction = GetEncryptedFunction(exceptionAddress)), currentEncryptedFunction == nullptr)
+        if ((currentEncryptedFunction = getEncryptedFunction(exceptionAddress)), currentEncryptedFunction == nullptr)
             return EXCEPTION_CONTINUE_SEARCH;
 
         PCONTEXT contextRecord = exceptionInfo->ContextRecord;
@@ -103,14 +103,14 @@ private:
     /*
     * Returns true of the address passed is the entrypoint to an already encrypted function
     */
-    static bool IsEncryptedFunction(void* functionAddress) {
+    static bool isEncryptedFunction(void* functionAddress) {
         return encryptedFunctions.find(functionAddress) != encryptedFunctions.end();
     }
 
     /*
     * Returns class object of the function encrypted at the passed address
     */
-    static Scudo* GetEncryptedFunction(void* functionAddress) {
+    static Scudo* getEncryptedFunction(void* functionAddress) {
         auto it = encryptedFunctions.find(functionAddress);
         if (it != encryptedFunctions.end()) {
             return it->second;
@@ -121,7 +121,7 @@ private:
     /*
     * Returns the class object of the function encrypted with the specified return address
     */
-    static Scudo* ReturnAddressToFunction(void* returnAddress) {
+    static Scudo* returnAddressToFunction(void* returnAddress) {
         for (const auto& pair : encryptedFunctions) {
             Scudo* encryptedFunction = pair.second;
             if (encryptedFunction->lastReturnAddress == reinterpret_cast<uintptr_t>(returnAddress)) {
@@ -134,7 +134,7 @@ private:
     /*
     * Encrypt the function using B64 encryption
     */
-    void EncryptFunction(void* function, SIZE_T size) {
+    void encryptFunction(void* function, SIZE_T size) {
 
         // Set the protection
         MemoryProtect memFunction = MemoryProtect(functionAddress, functionSize, PAGE_EXECUTE_READWRITE);
@@ -154,7 +154,7 @@ private:
     /*
     * Decrypt the function by XORing with debug byte
     */
-    void DecryptFunction(void* function, SIZE_T size) {
+    void decryptFunction(void* function, SIZE_T size) {
 
         // Set the protection
         MemoryProtect memFunction = MemoryProtect(function, size, PAGE_EXECUTE_READWRITE);
@@ -165,9 +165,6 @@ private:
         for (SIZE_T i = 1; i < size; ++i) {
             static_cast<BYTE*>(function)[i] ^= this->xorKey; // Decrypt using XOR
         }
-
-        // Notify the enforcer thread to re-encrypt the function
-        wasDecrypted = true;
     }
 
     /*
@@ -182,10 +179,7 @@ private:
         *static_cast<BYTE*>((void*)this->lastReturnAddress) = this->lastReturnAddressByte;
 
         // Re-Encrypt the function
-        this->EncryptFunction(this->functionAddress, this->functionSize);
-
-        // Reset the decrypted flag
-        this->wasDecrypted = false;
+        this->encryptFunction(this->functionAddress, this->functionSize);
     }
 
     /*
@@ -203,7 +197,7 @@ private:
         *reinterpret_cast<BYTE*>(currentEncryptedFunction->lastReturnAddress) = DEBUG_BYTE;
 
         // Decrypt the function
-        currentEncryptedFunction->DecryptFunction(currentEncryptedFunction->functionAddress, currentEncryptedFunction->functionSize);
+        currentEncryptedFunction->decryptFunction(currentEncryptedFunction->functionAddress, currentEncryptedFunction->functionSize);
     }
 
     // For encryption and decryption
@@ -218,9 +212,6 @@ private:
     unsigned int xorKey;
     uintptr_t lastReturnAddress;
     BYTE lastReturnAddressByte;
-
-    // Status variables
-    bool wasDecrypted;
 
     // For Handler
     static thread_local Scudo* currentEncryptedFunction;

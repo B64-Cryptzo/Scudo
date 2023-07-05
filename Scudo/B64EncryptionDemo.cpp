@@ -1,6 +1,5 @@
 ﻿#include "B64Encryption.h"
 
-#include <thread>
 int Add(int a, int b)
 {
 	return a+b;
