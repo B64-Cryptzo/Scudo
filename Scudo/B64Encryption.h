@@ -1,5 +1,4 @@
 #pragma once
-
 #include "../B64/B64Protect.h"
 #include "../B64/B64Function.h"
 
@@ -16,13 +15,13 @@ public:
     * Initializer for Scudo that encrypts the function and ensures all variables are set for decryption
     */
     Scudo(void* functionAddress) : functionAddress(functionAddress), functionSize(GetFunctionLength(functionAddress)) {
-
+        
         // Ensure valid function pointer was passed
         if (!functionAddress || !functionSize)
             return;
 
         // Set the XOR byte to a random value
-        xorKey = static_cast<unsigned int>(((std::clock() + CLOCKS_PER_SEC) << 10) & 0xFFFFFFFF);
+        xorKey = std::random_device()() % 9000000000 + 1000000000;
 
         // Initialize the Handler
         if (!isExceptionHandlingInitialized) {
@@ -48,7 +47,61 @@ public:
         // Remove the encrypted function from the map
         encryptedFunctions.erase(functionAddress);
     }
-    
+
+    /*
+    * Exception handler that will handle and parse the ICE debug instructions placed on functions
+    */
+    static LONG NTAPI ExceptionHandler(EXCEPTION_POINTERS* exceptionInfo) {
+
+        // Shorten the pointer chain for simplicity
+        PEXCEPTION_RECORD exceptionRecord = exceptionInfo->ExceptionRecord;
+
+        // If the exception isn't a breakpoint, look for another handler
+        if (exceptionRecord->ExceptionCode != EXCEPTION_BREAKPOINT)
+            return EXCEPTION_CONTINUE_SEARCH;
+
+        // Get the address where the exception occured
+        void* exceptionAddress = exceptionRecord->ExceptionAddress;
+
+        std::cout << "Breakpoint Reached: 0x" << exceptionAddress << "\n";
+        std::cin.get();
+        /*
+        * Use INT3 instruction breakpoint at return address found on the stack to trigger an exception which will
+        * allow the program to re-encrypt the function immediately after it's done executing.
+        */
+        if (!IsEncryptedFunction(exceptionAddress)) // Check if the breakpoint occured at an encrypted function
+        {
+            // Get the encrypted function's object from the return address associated with it
+            if ((currentEncryptedFunction = ReturnAddressToFunction(exceptionAddress)), currentEncryptedFunction == nullptr)
+                return EXCEPTION_CONTINUE_SEARCH;
+
+            // Re-encrypt the function aswell as remove the breakpoint from the return address
+            currentEncryptedFunction->encryptionRoutine();
+
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+
+
+        // Get the encrypted function's object
+        if ((currentEncryptedFunction = GetEncryptedFunction(exceptionAddress)), currentEncryptedFunction == nullptr)
+            return EXCEPTION_CONTINUE_SEARCH;
+
+        PCONTEXT contextRecord = exceptionInfo->ContextRecord;
+
+        // Create a pointer to the rspAddress
+        uintptr_t* returnAddressPtr = reinterpret_cast<uintptr_t*>(contextRecord->Rsp);
+
+        // Dereference the pointer to retrieve the return address value
+        currentEncryptedFunction->lastReturnAddress = *returnAddressPtr;
+
+        // Decrypts the function and puts breakpoint on return address
+        currentEncryptedFunction->decryptionRoutine();
+
+        // Resume execution
+        return EXCEPTION_CONTINUE_EXECUTION;
+        
+    }
+private:
     /*
     * Returns true of the address passed is the entrypoint to an already encrypted function
     */
@@ -80,63 +133,6 @@ public:
         return nullptr;
     }
 
-    /*
-    * Exception handler that will handle and parse the ICE debug instructions placed on functions
-    */
-    static LONG NTAPI ExceptionHandler(EXCEPTION_POINTERS* exceptionInfo) {
-
-        // Shorten the pointer chain for simplicity
-        PEXCEPTION_RECORD exceptionRecord = exceptionInfo->ExceptionRecord;
-
-        // If the exception isn't a breakpoint, look for another handler
-        if (exceptionRecord->ExceptionCode != EXCEPTION_BREAKPOINT)
-            return EXCEPTION_CONTINUE_SEARCH;
-
-        // Get the address where the exception occured
-        void* exceptionAddress = exceptionRecord->ExceptionAddress;
-
-        /*
-        * Use INT3 instruction breakpoint at return address found on the stack to trigger an exception which will
-        * allow the program to re-encrypt the function immediately after it's done executing.
-        */
-        if (IsEncryptedFunction(exceptionAddress)) // Check if the breakpoint occured at an encrypted function
-        {
-            // Get the encrypted function's object
-            currentEncryptedFunction = GetEncryptedFunction(exceptionAddress); 
-
-            if (currentEncryptedFunction) {
-
-                PCONTEXT contextRecord = exceptionInfo->ContextRecord; 
-
-                // Create a pointer to the rspAddress
-                uintptr_t* returnAddressPtr = reinterpret_cast<uintptr_t*>(contextRecord->Rsp);
-
-                // Dereference the pointer to retrieve the return address value
-                currentEncryptedFunction->lastReturnAddress = *returnAddressPtr;
-
-                // Decrypts the function and puts breakpoint on return address
-                currentEncryptedFunction->decryptionRoutine();
-
-                // Resume execution
-                return EXCEPTION_CONTINUE_EXECUTION;
-            }
-        }
-        else
-        {
-            // Get the encrypted function's object from the return address associated with it
-            currentEncryptedFunction = ReturnAddressToFunction(exceptionAddress);
-
-            if (currentEncryptedFunction) {
-
-                // Re-encrypt the function aswell as remove the breakpoint from the return address
-                currentEncryptedFunction->encryptionRoutine();
-
-                return EXCEPTION_CONTINUE_EXECUTION;
-            }
-            return EXCEPTION_CONTINUE_SEARCH;
-        }
-    }
-private:
     /*
     * Encrypt the function using B64 encryption
     */

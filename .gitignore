@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+*.ipch
+.vs/Scudo/v17/Browse.VC.db
+.vs/Scudo/v17/.suo
