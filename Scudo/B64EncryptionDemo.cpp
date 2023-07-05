@@ -12,10 +12,11 @@ int main()
 	
 	std::cout << "[ + ] Before encryption: " << Add(1, 1) << "\n";
 
-	Scudo* newFunction = new Scudo(&Add);
+	Scudo newFunction(&Add);
 
 	std::cout << "[ + ] After encryption: " << Add(1, 1) << "\n";
 
 	std::cin.get();
+
 	return 1;
 }
