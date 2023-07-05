@@ -1,6 +1,6 @@
 ﻿#include "B64Encryption.h"
 
-
+#include <thread>
 int Add(int a, int b)
 {
 	return a+b;
@@ -15,7 +15,7 @@ int main()
 	Scudo* newFunction = new Scudo(&Add);
 
 	std::cout << "[ + ] After encryption: " << Add(1, 1) << "\n";
-
+	
 	std::cin.get();
 
 	return 1;

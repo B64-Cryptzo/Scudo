@@ -48,6 +48,7 @@ public:
         encryptedFunctions.erase(functionAddress);
     }
 
+private:
     /*
     * Exception handler that will handle and parse the ICE debug instructions placed on functions
     */
@@ -63,8 +64,6 @@ public:
         // Get the address where the exception occured
         void* exceptionAddress = exceptionRecord->ExceptionAddress;
 
-        std::cout << "Breakpoint Reached: 0x" << exceptionAddress << "\n";
-        std::cin.get();
         /*
         * Use INT3 instruction breakpoint at return address found on the stack to trigger an exception which will
         * allow the program to re-encrypt the function immediately after it's done executing.
@@ -80,7 +79,6 @@ public:
 
             return EXCEPTION_CONTINUE_EXECUTION;
         }
-
 
         // Get the encrypted function's object
         if ((currentEncryptedFunction = GetEncryptedFunction(exceptionAddress)), currentEncryptedFunction == nullptr)
@@ -101,7 +99,7 @@ public:
         return EXCEPTION_CONTINUE_EXECUTION;
         
     }
-private:
+
     /*
     * Returns true of the address passed is the entrypoint to an already encrypted function
     */

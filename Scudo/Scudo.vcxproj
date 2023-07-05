@@ -138,9 +138,6 @@
   <ItemGroup>
     <ClCompile Include="B64EncryptionDemo.cpp" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="for later" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
