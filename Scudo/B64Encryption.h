@@ -4,12 +4,10 @@
 
 constexpr BYTE DEBUG_BYTE = 0xCC; // Intel ICE debugging byte
 
-bool isExceptionHandlingInitialized = false;
-
 class Scudo {
 
 public:
-    using EncryptedFunctionMap = std::map<void*, Scudo*>; // Map to access all encrypted functions
+    using EncryptedFunctionMap = std::unordered_map<void*, Scudo*>; // Map to access all encrypted functions
 
     /*
     * Initializer for Scudo that encrypts the function and ensures all variables are set for decryption
@@ -18,15 +16,15 @@ public:
         
         // Ensure valid function pointer was passed
         if (!functionAddress || !functionSize)
-            return;
+            throw std::invalid_argument("Invalid functionAddress or functionSize");
 
         // Set the XOR byte to a random value
         xorKey = std::random_device()() % 9000000000 + 1000000000;
 
         // Initialize the Handler
-        if (!isExceptionHandlingInitialized) {
+        if (!isExceptionHandlingInitialized.load()) {
             exceptionHandler = AddVectoredExceptionHandler(0, ExceptionHandler);
-            isExceptionHandlingInitialized = true;
+            isExceptionHandlingInitialized.store(true);
         }
 
         // Encrypt the function
@@ -216,9 +214,12 @@ private:
     // For Handler
     static thread_local Scudo* currentEncryptedFunction;
     static EncryptedFunctionMap encryptedFunctions;
+    static std::atomic<bool> isExceptionHandlingInitialized;
 };
 
 // Initialize static variables
 typename Scudo::EncryptedFunctionMap Scudo::encryptedFunctions;
 
 thread_local Scudo* Scudo::currentEncryptedFunction;
+
+std::atomic<bool> Scudo::isExceptionHandlingInitialized(false);

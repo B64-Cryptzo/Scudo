@@ -1,14 +1,14 @@
 #pragma once
 #include <windows.h>
 #include <random>
-#include <map>
+#include <unordered_map>
 
 
 #define RVA(addAddress) (addAddress + (*reinterpret_cast<DWORD*>((uintptr_t)addAddress + 1)) + 5)
 
 
 // Memory protection typedefs
-typedef BOOL(WINAPI* VirtualProtectFunc)(LPVOID lpAddress, SIZE_T dwSize, DWORD flNewProtect, PDWORD lpflOldProtect);
+using VirtualProtectFunc = BOOL(WINAPI*)(LPVOID lpAddress, SIZE_T dwSize, DWORD flNewProtect, PDWORD lpflOldProtect);
 
 // MemoryProtect class to temporarily modify memory protection
 class MemoryProtect
@@ -35,8 +35,7 @@ public:
             }
         }
     }
-
-    bool Success() const
+    operator bool() const
     {
         return success_;
     }
