@@ -144,6 +144,7 @@ private:
         for (SIZE_T i = 1; i < size; ++i) {
             static_cast<BYTE*>(function)[i] ^= this->xorKey; // Encrypt using XOR
         }
+        //polyc::algo(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(function) + 1), size - 1);
 
         // Set the first byte to the debug byte
         *static_cast<BYTE*>(functionAddress) = DEBUG_BYTE;
@@ -160,6 +161,7 @@ private:
         // Restore the first byte of the function
         *static_cast<BYTE*>(function) = this->firstByte;
 
+        //polyc::algo(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(function) + 1), size - 1);
         for (SIZE_T i = 1; i < size; ++i) {
             static_cast<BYTE*>(function)[i] ^= this->xorKey; // Decrypt using XOR
         }
