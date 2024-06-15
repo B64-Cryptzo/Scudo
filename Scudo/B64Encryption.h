@@ -44,7 +44,7 @@ public:
      * Ensures that the function is decrypted and all vectors and maps are adjusted.
      */
     ~Scudo();
-
+     
     /**
      * @brief Unprotects all functions and removes the exception handler
      */
