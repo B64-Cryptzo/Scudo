@@ -2,10 +2,9 @@
 #include <windows.h>
 #include <random>
 #include <unordered_map>
-
+#include <mutex>
 
 #define RVA(addAddress) (addAddress + (*reinterpret_cast<DWORD*>((uintptr_t)addAddress + 1)) + 5)
-
 
 // Memory protection typedefs
 using VirtualProtectFunc = BOOL(WINAPI*)(LPVOID lpAddress, SIZE_T dwSize, DWORD flNewProtect, PDWORD lpflOldProtect);

@@ -2,7 +2,7 @@
 #include <windows.h>
 #include "../B64/B64Opcode.h"
 
-std::int32_t GetFunctionLength(void* function) {
+inline std::int32_t GetFunctionLength(void* function) {
 
 	if (!function)
 		return 0;
