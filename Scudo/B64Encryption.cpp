@@ -196,7 +196,7 @@ void Scudo::encryptionRoutine()
     *static_cast<BYTE*>((void*)this->lastReturnAddress) = this->lastReturnAddressByte;
 
     // Generate a new key to ensure a new encryption
-    xorKey = randomKey();
+    this->xorKey = randomKey();
 
     // Re-Encrypt the function
     this->encryptFunction(this->functionAddress, this->functionSize);
