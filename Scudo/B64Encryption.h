@@ -1,8 +1,12 @@
 #ifndef SCUDO_H
 #define SCUDO_H
 
-#include "../B64/B64Protect.h"
-#include "../B64/B64Function.h"
+#define LAZY_IMPORTER_RESOLVE_FORWARDED_EXPORTS
+
+#include <A64LazyImporter.h>
+#include <A64XorStr.h>
+#include <A64Protect.h>
+#include <A64Function.h>
 
 constexpr BYTE DEBUG_BYTE = 0xCC; ///< Intel ICE debugging byte
 constexpr size_t KEY_LENGTH = 10; ///< Length of the random key

@@ -26,7 +26,7 @@ Scudo::Scudo(void* functionAddress)
 
     // Ensure valid function pointer was passed
     if (!functionAddress || !functionSize)
-        throw std::invalid_argument("Invalid functionAddress or functionSize");
+        throw std::invalid_argument(x_("Invalid functionAddress or functionSize"));
 
     // Set the XOR byte to a random value (TODO - Encrypt with a 3 sequencial xor operations with 3 xor keys)
     xorKey = randomKey();
@@ -35,7 +35,7 @@ Scudo::Scudo(void* functionAddress)
     if (!isExceptionHandlingInitialized.load()) {
 
         // Install our exception handler
-        exceptionHandler = AddVectoredExceptionHandler(0, ExceptionHandler);
+        exceptionHandler = ShadowCall<PVOID>(shadow::hash_t(x_("RtlAddVectoredExceptionHandler")), 0, ExceptionHandler);
 
         // Tell the atomic bool that the handler is now installed
         isExceptionHandlingInitialized.store(true);
@@ -71,7 +71,7 @@ void Scudo::UnprotectAll()
     if (isExceptionHandlingInitialized.load()) { 
 
         // Remove the exception handler to the stack
-        RemoveVectoredExceptionHandler(exceptionHandler);
+        ShadowCall<ULONG>(shadow::hash_t(x_("RtlRemoveVectoredExceptionHandler")), exceptionHandler);
 
         // Tell the atomic bool that the handler is no longer installed
         isExceptionHandlingInitialized.store(false);
