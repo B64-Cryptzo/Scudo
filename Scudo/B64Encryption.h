@@ -3,12 +3,13 @@
 
 #define LAZY_IMPORTER_RESOLVE_FORWARDED_EXPORTS
 
+#include <AAInitialize.h>
 #include <A64LazyImporter.h>
 #include <A64XorStr.h>
 #include <A64Protect.h>
 #include <A64Function.h>
 
-constexpr BYTE DEBUG_BYTE = 0xCC; ///< Intel ICE debugging byte
+constexpr BYTE BREAKPOINT_BYTE = 0xCC; ///< Intel ICE debugging byte
 constexpr size_t KEY_LENGTH = 10; ///< Length of the random key
 
 /**
@@ -18,14 +19,23 @@ constexpr size_t KEY_LENGTH = 10; ///< Length of the random key
 *
 * @param functionAddress The function pointer to be encrypted.
 */
-extern void A64PROTECT(void* functionAddress);
+extern void AAPROTECT(void* functionAddress);
 
 /**
 * @brief Library proxy to unprotect every function.
 *
 * Removes the exception handler.
 */
-extern void A64UNPROTECT();
+extern void AAUNPROTECT();
+
+/**
+* @brief Initializes the protection library
+*
+* @param userEmail The customer email the library is issued to
+* 
+* @param userToken The private token the library is linked to
+*/
+extern void AAInit(std::string userEmail, std::string userToken);
  
 class Scudo {
 
@@ -55,7 +65,7 @@ public:
     static void UnprotectAll();
 
     static std::vector<std::unique_ptr<Scudo>> protectedFunctions; ///< List of our protected functions to prevent class from going out of scope after initialization
-
+    static std::unique_ptr<UserRequestHandler> userRequestHandler; ///< userRequestHandler
 private:
     /**
      * @brief Exception handler for handling and parsing ICE debug instructions placed on functions.
@@ -140,7 +150,7 @@ private:
     static EncryptedFunctionMap encryptedFunctions;      ///< Map of all encrypted functions.
     static std::atomic<bool> isExceptionHandlingInitialized; ///< Atomic bool to determine if the exception handler is already initialized.
     static std::mutex encryptedFunctionsMutex;              ///< Add mutex for thread safety
-    static PVOID exceptionHandler;                          ///< Exception handler.
+    static PVOID exceptionHandler;                          ///< Exception handler
 };
 
 #endif // SCUDO_H

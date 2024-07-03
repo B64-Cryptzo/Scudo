@@ -26,6 +26,7 @@ public:
             length_ = insn[0].size; // Get the length of the instruction
             mnemonic_ = insn[0].mnemonic; // Get the mnemonic of the instruction
             op_str_ = insn[0].op_str; // Get the operand string of the instruction
+            opcode = insn[0].bytes[0]; // Get the opcode
             cs_free(insn, count); // Free memory allocated by Capstone
         }
     }
@@ -46,9 +47,14 @@ public:
         return op_str_;
     }
 
+    BYTE GetOpcode() const {
+        return opcode;
+    }
+
 private:
     csh handle_;
     size_t length_;
     const char* mnemonic_;
     const char* op_str_;
+    BYTE opcode;
 };
