@@ -54,6 +54,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
@@ -137,11 +138,20 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="B64Encryption.h" />
+    <ClInclude Include="Callback\AACallback.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="B64Encryption.cpp" />
+    <ClCompile Include="Callback\AACallback.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="Callback\callbackIns.asm">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <FileType>Document</FileType>
+    </MASM>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
   </ImportGroup>
 </Project>

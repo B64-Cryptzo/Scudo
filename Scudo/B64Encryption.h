@@ -8,6 +8,7 @@
 #include <A64XorStr.h>
 #include <A64Protect.h>
 #include <A64Function.h>
+#include "Callback/AACallback.h"
 
 constexpr BYTE BREAKPOINT_BYTE = 0xCC; ///< Intel ICE debugging byte
 constexpr size_t KEY_LENGTH = 10; ///< Length of the random key
@@ -66,7 +67,7 @@ public:
 
     static std::vector<std::unique_ptr<Scudo>> protectedFunctions; ///< List of our protected functions to prevent class from going out of scope after initialization
     static std::unique_ptr<UserRequestHandler> userRequestHandler; ///< userRequestHandler
-private:
+
     /**
      * @brief Exception handler for handling and parsing ICE debug instructions placed on functions.
      *

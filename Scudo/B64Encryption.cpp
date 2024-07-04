@@ -15,6 +15,67 @@ std::unique_ptr<UserRequestHandler> Scudo::userRequestHandler = nullptr;
 
 PVOID Scudo::exceptionHandler = NULL;
 
+#ifdef AA_USECALLBACK
+EXTERN_C VOID topLevelHandler(PEXCEPTION_RECORD exceptionRecord, PCONTEXT contextRecord) {
+    // Always check if the user is authenticated
+    if (!Scudo::userRequestHandler->isAuthenticated()) {
+        RtlRestoreContext(contextRecord, NULL);
+        return;
+    }
+
+    // If the exception isn't a breakpoint, look for another handler
+    if (exceptionRecord->ExceptionCode != EXCEPTION_BREAKPOINT) {
+        RtlRestoreContext(contextRecord, NULL);
+        return;
+    }
+
+    // Get the address where the exception occured
+    void* exceptionAddress = exceptionRecord->ExceptionAddress;
+
+    /*
+    * Use INT3 instruction breakpoint at return address found on the stack to trigger an exception which will
+    * allow the program to re-encrypt the function immediately after it's done executing.
+    */
+    if (!Scudo::isEncryptedFunction(exceptionAddress)) // Check if the breakpoint occured at an encrypted function
+    {
+        // Get the encrypted function's object from the return address associated with it
+        if ((Scudo::currentEncryptedFunction = Scudo::returnAddressToFunction(exceptionAddress)), Scudo::currentEncryptedFunction == nullptr) {
+            RtlRestoreContext(contextRecord, NULL);
+            return;
+        }
+
+        // Re-encrypt the function aswell as remove the breakpoint from the return address
+        Scudo::currentEncryptedFunction->encryptionRoutine();
+
+        contextRecord->EFlags |= (1 << 16);
+        RtlRestoreContext(contextRecord, NULL);
+        return;
+    }
+
+    // Get the encrypted function's object
+    if ((Scudo::currentEncryptedFunction = Scudo::getEncryptedFunction(exceptionAddress)), Scudo::currentEncryptedFunction == nullptr) {
+        RtlRestoreContext(contextRecord, NULL);
+        return;
+    }
+
+    // Create a pointer to the rspAddress
+    uintptr_t* returnAddressPtr = reinterpret_cast<uintptr_t*>(contextRecord->Rsp);
+
+    // Dereference the pointer to retrieve the return address value
+    Scudo::currentEncryptedFunction->lastReturnAddress = *returnAddressPtr;
+
+    // Decrypts the function and puts breakpoint on return address
+    Scudo::currentEncryptedFunction->decryptionRoutine();
+
+    // Resume execution
+    contextRecord->EFlags |= (1 << 16);
+    RtlRestoreContext(contextRecord, NULL);
+    return;
+}
+#endif // !AA_USECALLBACK
+
+
+
 void AAPROTECT(void* functionAddress) {
     // Always check if the user is authenticated
     if (!Scudo::userRequestHandler->isAuthenticated())
@@ -59,7 +120,11 @@ Scudo::Scudo(void* functionAddress)
     if (!isExceptionHandlingInitialized.load()) {
 
         // Install our exception handler
+#ifndef AA_USECALLBACK
         exceptionHandler = ShadowCall<PVOID>(shadow::hash_t(x_("RtlAddVectoredExceptionHandler")), 1, ExceptionHandler);
+#else
+        InstallCallback(true);
+#endif // !AA_USECALLBACK
 
         // Tell the atomic bool that the handler is now installed
         isExceptionHandlingInitialized.store(true);
@@ -95,7 +160,11 @@ void Scudo::UnprotectAll()
     if (isExceptionHandlingInitialized.load()) { 
 
         // Remove the exception handler to the stack
+#ifndef AA_USECALLBACK
         ShadowCall<ULONG>(shadow::hash_t(x_("RtlRemoveVectoredExceptionHandler")), exceptionHandler);
+#else
+        InstallCallback(false);
+#endif // !AA_USECALLBACK     
 
         // Tell the atomic bool that the handler is no longer installed
         isExceptionHandlingInitialized.store(false);

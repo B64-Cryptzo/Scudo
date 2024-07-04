@@ -51,6 +51,7 @@ private:
         static VirtualProtectFunc virtualProtectFunc = reinterpret_cast<VirtualProtectFunc>(
             ShadowCall<FARPROC>("GetProcAddress", ShadowCall<HMODULE>("LoadLibraryA", "kernel32.dll"), "VirtualProtect")
             );
+
         return virtualProtectFunc;
     }
 };

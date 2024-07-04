@@ -18,10 +18,21 @@
     <ClInclude Include="B64Encryption.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Callback\AACallback.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="B64Encryption.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Callback\AACallback.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="Callback\callbackIns.asm">
+      <Filter>Source Files</Filter>
+    </MASM>
   </ItemGroup>
 </Project>
