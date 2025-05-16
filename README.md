@@ -11,12 +11,12 @@ Scudo is a C++ library that provides a method to encrypt sensitive functions all
 ```cpp
 #pragma comment(lib, "Scudo.lib")
 
-extern void A64PROTECT(void* functionAddress);
-extern void A64UNPROTECT();
+extern void AAPROTECT(void* functionAddress);
+extern void AAUNPROTECT();
 
 int main()
 {
- A64PROTECT(&Function);
+ AAPROTECT(&Function);
 
 // Call your function whenever you want 
 ...
